@@ -7,6 +7,9 @@ ui <- fluidPage(
    # Application title
    titlePanel("Fine-map QTL with NIL phenotypes"),
    
+   # text explanation
+   uiOutput("intro"),
+   
    sidebarLayout(
        sidebarPanel(
            # Input: Select a file ----
@@ -297,6 +300,22 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
             dplyr::group_by(strain) %>%
             dplyr::summarize(pheno = max(phenotype))
         
+        # if multiple QTL, find the genotype at each QTL
+        geno <- NULL
+        for(i in pos) {
+            genodf <- nilgeno %>%
+                dplyr::filter(chrom == chr, 
+                              sample %in% df2$strain,
+                              start < pos*1e6,
+                              end > pos*1e6) %>%
+                dplyr::distinct(sample, start, gt_name) %>%
+                dplyr::mutate(geno = dplyr::case_when(gt_name == "N2" ~ "N",
+                                                      TRUE ~ "C")) %>%
+                dplyr::select(strain = sample, geno) %>%
+                dplyr::left_join(df2)
+            geno <- rbind(geno, genodf)
+        }
+        
         geno <- nilgeno %>%
             dplyr::filter(chrom == chr, 
                           sample %in% df2$strain,
@@ -343,51 +362,92 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
 # Define server logic required for application
 server <- function(input, output) {
     
+    email <- a("Katie", href="mailto:kathrynevans2015@u.northwestern.edu")
+    
+    # intro text
+    output$intro <- renderUI({
+        tagList(
+            "This shiny app can be used to view NIL phenotypes and genotypes and estimate the location of a QTL. To begin,
+            click the button below to open a R data file containing NIL phenotypes. Once the file has loaded, choose a condition,
+            trait, and chromosome to plot. To show a veritcal line representing the QTL, check the 'Show QTL?' box and use the slider
+            to move the QTL position along the chromosome. Further, click the 'Show genotype?' box to print the genotype of each NIL 
+            at the QTL position on the phenotype plot to the right. Please direct all questions or comments to", email
+        )
+        
+    })
+    
     # give user options for choosing condition and trait once phenotype dataframe is uploaded
     output$choosetrait <- renderUI({
+        # only show if phenodf is not NULL
+        req(input$file1)
+        
         # load phenotype data
         assign('phenodf', get(load(input$file1$datapath)))
         
-        # only show if phenodf is not NULL
-        if(!is.null(phenodf)) {
-            tagList(
-                
-                # choose condition
-                selectInput("condition", "Select condition to plot:", choices = unique(phenodf$condition)),
-                
-                # choose trait
-                selectInput("trait", "Select trait to plot:", choices = unique(phenodf$trait)),
-                
-                # radio button input for chromosome to plot
-                radioButtons("chrom", "Choose chromosome to plot:", 
-                             choices = c("I", "II", "III", "IV", "V", "X"),
-                             inline = TRUE),
-                
-                # check box for showing QTL on the phenotye plots
-                checkboxInput("showqtl", "Show QTL?"),
-                
-                uiOutput("show_qtl_pos"),
-                
-                # check box for showing genotypes on the phenotye plots
-                checkboxInput("showgeno", "Show genotype?")
-                
-            )
-        }
+        tagList(
+            
+            # choose condition
+            selectInput("condition", "Select condition to plot:", choices = unique(phenodf$condition)),
+            
+            # choose trait
+            selectInput("trait", "Select trait to plot:", choices = unique(phenodf$trait)),
+            
+            # radio button input for chromosome to plot
+            radioButtons("chrom", "Choose chromosome to plot:", 
+                         choices = c("I", "II", "III", "IV", "V", "X"),
+                         inline = TRUE),
+            
+            # check box for showing QTL on the phenotye plots
+            checkboxInput("showqtl", "Show QTL?"),
+            
+            uiOutput("number_qtl"),
+            
+            uiOutput("show_qtl_pos"),
+            
+            # check box for showing genotypes on the phenotye plots
+            checkboxInput("showgeno", "Show genotype?")
+            
+        )
 
     })
     
-    output$show_qtl_pos <- renderUI({
+    # how many QTL?
+    output$number_qtl <- renderUI({
         # only show slider bar if the show QTL checkbox is checked
         if(input$showqtl == T) {
-            # slider input for vertical line for QTL position
-            sliderInput("qtlpos", "Choose position of QTL", 
-                        min = 0, max = 20, value = 10, step = 0.1)
+            
+            # how many qtl?
+            numericInput("numQTL", "How many QTL in your model?", 1)
+
         }
         
     })
     
+    # show slider bars
+    output$show_qtl_pos <- renderUI({
+        # only show slider bar if the show QTL checkbox is checked
+        if(input$showqtl == T) {
+            
+            # how many qtl in the model?
+            qtls <- input$numQTL
+            
+            # make slider for each QTL
+            lapply(1:qtls, function(i) {
+                tagList(
+                    sliderInput(glue::glue("qtlpos{i}"), glue::glue("Choose position of QTL {i}"),
+                                min = 0, max = 20, value = 10, step = 0.1)
+                )
+            })
+        }
+        
+    })
+    
+    
     # plot nil phenotypes given user input data
     output$pheno_plot <- renderPlot({
+        
+        # only show if phenodf is not NULL
+        req(input$file1)
         
         assign('phenodf', get(load(input$file1$datapath)))
         
@@ -399,8 +459,18 @@ server <- function(input, output) {
         
         # show QTL if it is clicked
         if(input$showqtl == T) {
+            # how many qtl?
+            qtls <- input$numQTL
+            
+            # get all QTL locations
+            vals <- NULL
+            for(i in 1:qtls) {
+                vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
+            }
+
             genoplot <- geno[[1]] +
-                ggplot2::geom_vline(xintercept = input$qtlpos)
+                ggplot2::geom_vline(xintercept = vals)
+            
         } else {
             genoplot <- geno[[1]]
         }
@@ -413,11 +483,12 @@ server <- function(input, output) {
                                          input$condition, 
                                          input$trait, 
                                          geno = input$showgeno, 
-                                         pos = input$qtlpos, 
+                                         pos = vals, 
                                          chr = input$chrom) + 
             ggplot2::facet_grid(~trait)
         
         cowplot::plot_grid(genoplot, pheno)
+        
     })
 }
 
