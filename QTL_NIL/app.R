@@ -1,5 +1,6 @@
 library(shiny)
 library(tidyverse)
+library(shinyjs)
 
 # Define UI for application
 ui <- fluidPage(
@@ -12,9 +13,13 @@ ui <- fluidPage(
    
    sidebarLayout(
        sidebarPanel(
-           # Input: Select a file ----
+           # Input: Select a file
            fileInput("file1", "Choose phenotype file (Rdata)",
                      accept = c(".rda", ".Rda", ".RData")),
+           
+           # or choose to use provided sample data
+           shinyjs::useShinyjs(),
+           checkboxInput("sampledata", "Use sample data"),
            
            # show the options to choose trait and conditions after the user has uploaded a file
            uiOutput("choosetrait"),
@@ -367,7 +372,8 @@ server <- function(input, output) {
             click the button below to open a R data file containing NIL phenotypes. Once the file has loaded, choose a condition,
             trait, and chromosome to plot. To show a veritcal line representing the QTL, check the 'Show QTL?' box and use the slider
             to move the QTL position along the chromosome. Further, click the 'Show genotype?' box to print the genotype of each NIL 
-            at the QTL position on the phenotype plot to the right. Please direct all questions or comments to", email
+            at the QTL position on the phenotype plot to the right. No data to analyze right now? No problem. You can use our sample
+            data provided with the app by checking the 'Use sample data' checkbox. Please direct all questions or comments to", email
         )
         
     })
@@ -375,10 +381,15 @@ server <- function(input, output) {
     # give user options for choosing condition and trait once phenotype dataframe is uploaded
     output$choosetrait <- renderUI({
         # only show if phenodf is not NULL
-        req(input$file1)
         
         # load phenotype data
-        assign('phenodf', get(load(input$file1$datapath)))
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            updateCheckboxInput(session, "sampledata", value = 0)
+        }
         
         tagList(
             
@@ -443,9 +454,15 @@ server <- function(input, output) {
     output$pheno_plot <- renderPlot({
         
         # only show if phenodf is not NULL
-        req(input$file1)
         
-        assign('phenodf', get(load(input$file1$datapath)))
+        # load phenotype data
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            updateCheckboxInput(session, "sampledata", value = 0)
+        }
         
         # strains from dataframe
         strains <- unique(phenodf$strain)
