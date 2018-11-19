@@ -302,29 +302,26 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
         
         # if multiple QTL, find the genotype at each QTL
         geno <- NULL
+        genos <- NULL
         for(i in pos) {
             genodf <- nilgeno %>%
                 dplyr::filter(chrom == chr, 
                               sample %in% df2$strain,
-                              start < pos*1e6,
-                              end > pos*1e6) %>%
+                              start < i*1e6,
+                              end > i*1e6) %>%
                 dplyr::distinct(sample, start, gt_name) %>%
                 dplyr::mutate(geno = dplyr::case_when(gt_name == "N2" ~ "N",
                                                       TRUE ~ "C")) %>%
-                dplyr::select(strain = sample, geno) %>%
-                dplyr::left_join(df2)
-            geno <- rbind(geno, genodf)
+                dplyr::select(strain = sample, geno)
+            genos <- dplyr::bind_rows(genos, genodf)
         }
         
-        geno <- nilgeno %>%
-            dplyr::filter(chrom == chr, 
-                          sample %in% df2$strain,
-                          start < pos*1e6,
-                          end > pos*1e6) %>%
-            dplyr::distinct(sample, start, gt_name) %>%
-            dplyr::mutate(geno = dplyr::case_when(gt_name == "N2" ~ "N",
-                                                  TRUE ~ "C")) %>%
-            dplyr::select(strain = sample, geno) %>%
+    # combine genotypes (if more than one QTL)
+        geno <- genos %>%
+            dplyr::group_by(strain) %>%
+            dplyr::mutate(genotype = paste(geno, collapse = "")) %>%
+            dplyr::select(strain, geno = genotype) %>%
+            dplyr::distinct() %>%
             dplyr::left_join(df2)
         
        phen_gen %>%
@@ -335,11 +332,10 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
                 y = phenotype, 
                 fill=factor(type)) +
             geom_jitter(size = pointsize, width = 0.1)+
-            geom_text(aes(x = strain, y = pheno + 20, label = geno, 
-                          color = factor(geno))) +
+            geom_text(aes(x = strain, y = pheno, label = geno, vjust = 2)) +
             geom_boxplot(outlier.colour = NA, alpha = 0.7)+
             scale_fill_manual(values = c("N2_parent" = "orange", "CB_parent" = "blue", "NIL" = "gray"))+
-            scale_color_manual(values = c("N" = "orange", "C" = "blue"))+
+            # scale_color_manual(values = c("N" = "orange", "C" = "blue"))+
             theme_bw()+
             coord_flip()+
             theme(axis.text.x = element_text(size=textsize, face="bold", color="black"),
