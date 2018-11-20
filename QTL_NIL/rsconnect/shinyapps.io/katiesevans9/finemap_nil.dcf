@@ -5,8 +5,8 @@ account: katiesevans9
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 573593
-bundleId: 1709503
+bundleId: 1709580
 url: https://katiesevans9.shinyapps.io/finemap_nil/
-when: 1542662901.8894
+when: 1542666595.80641
 asMultiple: FALSE
 asStatic: FALSE

@@ -24,6 +24,9 @@ ui <- fluidPage(
            # show the options to choose trait and conditions after the user has uploaded a file
            uiOutput("choosetrait"),
            
+           # choose to select certain strains
+           uiOutput("choosestrains"),
+           
            # show the options to choose QTL and genotype
            uiOutput("chooseqtl")
            
@@ -43,7 +46,7 @@ load("data/nil_genotypes.Rda")
 
 
 # function for nil genotype plot
-nil_plot <- function(strains, chr, left.cb = 0, left.n2 = 0, left.bound = 1, right.bound = 19e6, scan.range = 2e4, 
+nil_plot <- function(strains, chr, left.cb = 0, left.n2 = 0, left.bound = 0, right.bound = 19e6, scan.range = 2e4, 
                      all.chr=F, section = "all", background = F, ci = 1){
     # # # determine if NILs are CB or N2
     nilsII_sort_type <- nilgeno %>%
@@ -95,7 +98,7 @@ nil_plot <- function(strains, chr, left.cb = 0, left.n2 = 0, left.bound = 1, rig
         dplyr::filter(chrom == chr)%>%
         dplyr::left_join(.,nilsII_sort_type, by = "sample")%>%
         dplyr::left_join(.,nil_sides, by = "sample")%>%
-        dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>%
+        # dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>%
         dplyr::group_by(sample)%>%
         dplyr::filter(start > left.bound & start < right.bound)%>%
         dplyr::filter(end > left.bound | end < right.bound)%>%
@@ -116,7 +119,7 @@ nil_plot <- function(strains, chr, left.cb = 0, left.n2 = 0, left.bound = 1, rig
         dplyr::left_join(.,nilsII_sort_type, by = "sample")%>%
         dplyr::left_join(.,nil_sides, by = "sample")%>%
         dplyr::filter(side == "RIGHT")%>%
-        dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>%
+        # dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>% # this step gets rid of chr with no NIL
         dplyr::group_by(sample)%>%
         dplyr::filter(start > left.bound & start < right.bound)%>%
         dplyr::filter(end > left.bound | end < right.bound)%>%
@@ -131,12 +134,12 @@ nil_plot <- function(strains, chr, left.cb = 0, left.n2 = 0, left.bound = 1, rig
     
     N2CB <- nilgeno %>%
         dplyr::filter(sample %in% c("N2", "CB4856"), chrom == chr) %>%
-        dplyr::mutate(nil_type = "parent", side = NA, size = NA, gt_ct = NA)
+        dplyr::mutate(nil_type = "parent", side = NA, size = NA, gt_ct = NA) %>%
+        dplyr::distinct(sample, .keep_all = T)
     
     nilsII_sort <- bind_rows(nilsII_sort_right, nilsII_sort_left) %>%
-        arrange(desc(nil_type), desc(side), size)
-    
-    nilsII_sort <- rbind(nilsII_sort, N2CB)
+        dplyr::arrange(desc(nil_type), desc(side), size) %>%
+        dplyr::bind_rows(N2CB)
     
     if (all.chr == T){
         
@@ -324,7 +327,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
     # combine genotypes (if more than one QTL)
         geno <- genos %>%
             dplyr::group_by(strain) %>%
-            dplyr::mutate(genotype = paste(geno, collapse = "")) %>%
+            dplyr::mutate(genotype = paste(geno, collapse = " ")) %>%
             dplyr::select(strain, geno = genotype) %>%
             dplyr::distinct() %>%
             dplyr::left_join(df2)
@@ -337,7 +340,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
                 y = phenotype, 
                 fill=factor(type)) +
             geom_jitter(size = pointsize, width = 0.1)+
-            geom_text(aes(x = strain, y = pheno, label = geno, vjust = 2)) +
+            geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5), size = textsize - 7) +
             geom_boxplot(outlier.colour = NA, alpha = 0.7)+
             scale_fill_manual(values = c("N2_parent" = "orange", "CB_parent" = "blue", "NIL" = "gray"))+
             # scale_color_manual(values = c("N" = "orange", "C" = "blue"))+
@@ -373,7 +376,7 @@ server <- function(input, output) {
             trait, and chromosome to plot. To show a veritcal line representing the QTL, check the 'Show QTL?' box and use the slider
             to move the QTL position along the chromosome. Further, click the 'Show genotype?' box to print the genotype of each NIL 
             at the QTL position on the phenotype plot to the right. No data to analyze right now? No problem. You can use our sample
-            data provided with the app by checking the 'Use sample data' checkbox. Please direct all questions or comments to", email
+            data provided (on chrV) with the app by checking the 'Use sample data' checkbox. Please direct all questions or comments to", email
         )
         
     })
@@ -404,18 +407,36 @@ server <- function(input, output) {
                          choices = c("I", "II", "III", "IV", "V", "X"),
                          inline = TRUE),
             
+            # choose subset of strains?
+            checkboxInput("straininput", "Show a subset of strains?"),
+            
             # check box for showing QTL on the phenotye plots
             checkboxInput("showqtl", "Show QTL?"),
             
             uiOutput("number_qtl"),
             
-            uiOutput("show_qtl_pos"),
-            
-            # check box for showing genotypes on the phenotye plots
-            checkboxInput("showgeno", "Show genotype?")
+            uiOutput("show_qtl_pos")
             
         )
 
+    })
+    
+    # choose to select strains for the output
+    output$choosestrains <- renderUI({
+        # load phenotype data
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            updateCheckboxInput(session, "sampledata", value = 0)
+        }
+        
+        # only show the options if this is checked
+        if(input$straininput == T) {
+            # which strains to show?
+            checkboxGroupInput("whichstrains", "Which strains to include?", choices = unique(phenodf$strain), selected = unique(phenodf$strain))
+        }
     })
     
     # how many QTL?
@@ -438,13 +459,19 @@ server <- function(input, output) {
             # how many qtl in the model?
             qtls <- input$numQTL
             
-            # make slider for each QTL
-            lapply(1:qtls, function(i) {
-                tagList(
-                    sliderInput(glue::glue("qtlpos{i}"), glue::glue("Choose position of QTL {i}"),
-                                min = 0, max = 20, value = 10, step = 0.1)
-                )
-            })
+            tagList(
+                # make slider for each QTL
+                lapply(1:qtls, function(i) {
+                    tagList(
+                        sliderInput(glue::glue("qtlpos{i}"), glue::glue("Choose position of QTL {i}"),
+                                    min = 0, max = 20, value = 10, step = 0.1)
+                    )
+                }),
+                
+                # check box for showing genotypes on the phenotye plots
+                checkboxInput("showgeno", "Show genotype?")
+            )
+            
         }
         
     })
@@ -465,7 +492,11 @@ server <- function(input, output) {
         }
         
         # strains from dataframe
-        strains <- unique(phenodf$strain)
+        if(input$straininput == T) {
+            strains <- input$whichstrains
+        } else {
+            strains <- unique(phenodf$strain)
+        }
         
         # plot genotype with input chrom and qtl position as vertical line
         geno <- nil_plot(strains, input$chrom, left.bound = 0)
@@ -492,7 +523,8 @@ server <- function(input, output) {
         # plot data
         phenodf$strain <- factor(phenodf$strain, levels = unique(geno[[2]]$sample),
                                  labels = unique(geno[[2]]$sample))
-        pheno <- quick_plot_breakup_flip(phenodf %>% dplyr::ungroup(), 
+        pheno <- quick_plot_breakup_flip(phenodf %>% dplyr::ungroup() %>%
+                                             dplyr::filter(strain %in% strains), 
                                          input$condition, 
                                          input$trait, 
                                          geno = input$showgeno, 
