@@ -18,7 +18,6 @@ ui <- fluidPage(
                      accept = c(".rda", ".Rda", ".RData")),
            
            # or choose to use provided sample data
-           shinyjs::useShinyjs(),
            checkboxInput("sampledata", "Use sample data"),
            
            # show the options to choose trait and conditions after the user has uploaded a file
@@ -34,7 +33,11 @@ ui <- fluidPage(
        
        mainPanel(
            # Show a plot of the generated distribution
-           plotOutput("pheno_plot")
+           plotOutput("pheno_plot"),
+           
+           # button to output plot as png
+           # downloadButton('saveImage', 'Save plot')
+           uiOutput("saveButton")
        )
 
    )
@@ -279,7 +282,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
         dplyr::filter(trait == pltrt, condition == cond) %>%
         dplyr::mutate(type = ifelse(as.character(strain) == "N2", "N2_parent", ifelse(as.character(strain) == "CB4856", "CB_parent", "NIL")))
 
-    if(geno == F) {
+    if(geno == F || is.null(geno)) {
         phen_gen %>%
             ggplot(.) +
             aes(x = factor(strain),
@@ -301,7 +304,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
                   panel.background = element_rect( color="black",size=1.2),
                   strip.background = element_rect(color = "black", size = 1.2),
                   panel.border = element_rect( colour = "black"))+
-            labs(y = ylab)
+            labs(y = ylab, x = "")
     } else {
         
         df2 <- phen_gen %>%
@@ -357,7 +360,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
                   panel.background = element_rect( color="black",size=1.2),
                   strip.background = element_rect(color = "black", size = 1.2),
                   panel.border = element_rect( colour = "black"))+
-            labs(y = ylab)
+            labs(y = ylab, x = "")
     }
     
 }
@@ -365,6 +368,18 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, ylab = paste0(cond, ".", pl
 
 # Define server logic required for application
 server <- function(input, output) {
+    
+    loadPhenoData <- reactive({
+        # load phenotype data
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            # req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            # updateCheckboxInput(session, "sampledata", value = 0)
+        }
+    })
+    
     
     email <- a("Katie", href="mailto:kathrynevans2015@u.northwestern.edu")
     
@@ -391,8 +406,9 @@ server <- function(input, output) {
         } else {
             req(input$file1)
             assign('phenodf', get(load(input$file1$datapath)))
-            updateCheckboxInput(session, "sampledata", value = 0)
+            # updateCheckboxInput(session, "sampledata", value = 0)
         }
+        # loadPhenoData()
         
         tagList(
             
@@ -405,7 +421,8 @@ server <- function(input, output) {
             # radio button input for chromosome to plot
             radioButtons("chrom", "Choose chromosome to plot:", 
                          choices = c("I", "II", "III", "IV", "V", "X"),
-                         inline = TRUE),
+                         inline = TRUE,
+                         selected = "I"),
             
             # choose subset of strains?
             checkboxInput("straininput", "Show a subset of strains?"),
@@ -429,13 +446,16 @@ server <- function(input, output) {
         } else {
             req(input$file1)
             assign('phenodf', get(load(input$file1$datapath)))
-            updateCheckboxInput(session, "sampledata", value = 0)
+            # updateCheckboxInput(session, "sampledata", value = 0)
         }
+        # loadPhenoData()
         
         # only show the options if this is checked
-        if(input$straininput == T) {
-            # which strains to show?
-            checkboxGroupInput("whichstrains", "Which strains to include?", choices = unique(phenodf$strain), selected = unique(phenodf$strain))
+        if(!is.null(input$straininput)) {
+            if(input$straininput == T) {
+                # which strains to show?
+                checkboxGroupInput("whichstrains", "Which strains to include?", choices = unique(phenodf$strain), selected = unique(phenodf$strain))
+            }
         }
     })
     
@@ -476,11 +496,9 @@ server <- function(input, output) {
         
     })
     
-    
-    # plot nil phenotypes given user input data
-    output$pheno_plot <- renderPlot({
-        
+    plotInput <- reactive({
         # only show if phenodf is not NULL
+        # loadPhenoData()
         
         # load phenotype data
         if(input$sampledata == T) {
@@ -488,15 +506,14 @@ server <- function(input, output) {
         } else {
             req(input$file1)
             assign('phenodf', get(load(input$file1$datapath)))
-            updateCheckboxInput(session, "sampledata", value = 0)
+            # updateCheckboxInput(session, "sampledata", value = 0)
         }
         
         # strains from dataframe
+        strains <- unique(phenodf$strain)
         if(input$straininput == T) {
             strains <- input$whichstrains
-        } else {
-            strains <- unique(phenodf$strain)
-        }
+        } 
         
         # plot genotype with input chrom and qtl position as vertical line
         geno <- nil_plot(strains, input$chrom, left.bound = 0)
@@ -511,7 +528,7 @@ server <- function(input, output) {
             for(i in 1:qtls) {
                 vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
             }
-
+            
             genoplot <- geno[[1]] +
                 ggplot2::geom_vline(xintercept = vals)
             
@@ -533,8 +550,32 @@ server <- function(input, output) {
             ggplot2::facet_grid(~trait)
         
         cowplot::plot_grid(genoplot, pheno)
+    })
+    
+    
+    # plot nil phenotypes given user input data
+    output$pheno_plot <- renderPlot({
+        print(plotInput())
         
     })
+    
+    output$saveButton <- renderUI({
+        req(input$file1)
+        downloadButton('saveImage', 'Save plot')
+    })
+    
+    # output figure as png if button is pressed
+    savePlot <- eventReactive(input$saveImage, {
+        input$n
+    })
+    
+    output$saveImage <- downloadHandler(
+        filename = function() { 'test.png' },
+        content = function(file) {
+            ggsave(file, plot = plotInput(), device = "png")
+        }
+    )
+    
 }
 
 # Run the application 
