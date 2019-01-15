@@ -1,6 +1,7 @@
 library(shiny)
 library(tidyverse)
-library(shinyjs)
+# library(shinyjs)
+library(easysorter)
 
 # Define UI for application
 ui <- fluidPage(
@@ -11,14 +12,16 @@ ui <- fluidPage(
    # text explanation
    uiOutput("intro"),
    
+   br(),
+   
    sidebarLayout(
        sidebarPanel(
+           # or choose to use provided sample data
+           checkboxInput("sampledata", "Use sample data"),
+           
            # Input: Select a file
            fileInput("file1", "Choose phenotype file (Rdata)",
                      accept = c(".rda", ".Rda", ".RData")),
-           
-           # or choose to use provided sample data
-           checkboxInput("sampledata", "Use sample data"),
            
            # show the options to choose trait and conditions after the user has uploaded a file
            uiOutput("choosetrait"),
@@ -32,11 +35,15 @@ ui <- fluidPage(
        ),
        
        mainPanel(
+           # make tabs for each condition
+           tabsetPanel(type = "tabs",
+                       tabPanel("Control", plotOutput("control_plot")),
+                       tabPanel("Condition", plotOutput("condition_plot")),
+                       tabPanel("Regressed", plotOutput("regressed_plot"))),
            # Show a plot of the generated distribution
-           plotOutput("pheno_plot"),
+           # plotOutput("pheno_plot"),
            
            # button to output plot as png
-           # downloadButton('saveImage', 'Save plot')
            uiOutput("saveButton")
        )
 
@@ -412,8 +419,11 @@ server <- function(input, output) {
         
         tagList(
             
+            # choose control
+            selectInput("control", "Select control:", choices = unique(phenodf$condition)),
+            
             # choose condition
-            selectInput("condition", "Select condition to plot:", choices = unique(phenodf$condition)),
+            selectInput("condition", "Select condition:", choices = unique(phenodf$condition)),
             
             # choose trait
             selectInput("trait", "Select trait to plot:", choices = unique(phenodf$trait)),
@@ -496,7 +506,7 @@ server <- function(input, output) {
         
     })
     
-    plotInput <- reactive({
+    plotInput_control <- reactive({
         # only show if phenodf is not NULL
         # loadPhenoData()
         
@@ -536,6 +546,60 @@ server <- function(input, output) {
             genoplot <- geno[[1]]
         }
         
+        # plot data
+        phenodf$strain <- factor(phenodf$strain, levels = unique(geno[[2]]$sample),
+                                 labels = unique(geno[[2]]$sample))
+        pheno <- quick_plot_breakup_flip(phenodf %>% dplyr::ungroup() %>%
+                                             dplyr::filter(strain %in% strains), 
+                                         input$control, 
+                                         input$trait, 
+                                         geno = input$showgeno, 
+                                         pos = vals, 
+                                         chr = input$chrom) + 
+            ggplot2::facet_grid(~trait)
+        
+        cowplot::plot_grid(genoplot, pheno)
+    })
+    
+    plotInput_condition <- reactive({
+        # only show if phenodf is not NULL
+        # loadPhenoData()
+        
+        # load phenotype data
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            # updateCheckboxInput(session, "sampledata", value = 0)
+        }
+        
+        # strains from dataframe
+        strains <- unique(phenodf$strain)
+        if(input$straininput == T) {
+            strains <- input$whichstrains
+        } 
+        
+        # plot genotype with input chrom and qtl position as vertical line
+        geno <- nil_plot(strains, input$chrom, left.bound = 0)
+        
+        # show QTL if it is clicked
+        if(input$showqtl == T) {
+            # how many qtl?
+            qtls <- input$numQTL
+            
+            # get all QTL locations
+            vals <- NULL
+            for(i in 1:qtls) {
+                vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
+            }
+            
+            genoplot <- geno[[1]] +
+                ggplot2::geom_vline(xintercept = vals)
+            
+        } else {
+            genoplot <- geno[[1]]
+        }
         
         # plot data
         phenodf$strain <- factor(phenodf$strain, levels = unique(geno[[2]]$sample),
@@ -552,11 +616,80 @@ server <- function(input, output) {
         cowplot::plot_grid(genoplot, pheno)
     })
     
-    
-    # plot nil phenotypes given user input data
-    output$pheno_plot <- renderPlot({
-        print(plotInput())
+    plotInput_regressed <- reactive({
+        # only show if phenodf is not NULL
+        # loadPhenoData()
         
+        # load phenotype data
+        if(input$sampledata == T) {
+            assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
+        } else {
+            req(input$file1)
+            assign('phenodf', get(load(input$file1$datapath)))
+            # updateCheckboxInput(session, "sampledata", value = 0)
+        }
+        
+        # strains from dataframe
+        strains <- unique(phenodf$strain)
+        if(input$straininput == T) {
+            strains <- input$whichstrains
+        } 
+        
+        # plot genotype with input chrom and qtl position as vertical line
+        geno <- nil_plot(strains, input$chrom, left.bound = 0)
+        
+        # show QTL if it is clicked
+        if(input$showqtl == T) {
+            # how many qtl?
+            qtls <- input$numQTL
+            
+            # get all QTL locations
+            vals <- NULL
+            for(i in 1:qtls) {
+                vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
+            }
+            
+            genoplot <- geno[[1]] +
+                ggplot2::geom_vline(xintercept = vals)
+            
+        } else {
+            genoplot <- geno[[1]]
+        }
+        
+        # regress
+        pruned <- phenodf %>% 
+            dplyr::ungroup() %>%
+            dplyr::filter(strain %in% strains)
+        regressed <- easysorter::regress(pruned)
+        
+        # plot data
+        regressed$strain <- factor(regressed$strain, levels = unique(geno[[2]]$sample),
+                                 labels = unique(geno[[2]]$sample))
+        pheno <- quick_plot_breakup_flip(regressed, 
+                                         input$condition, 
+                                         input$trait, 
+                                         geno = input$showgeno, 
+                                         pos = vals, 
+                                         chr = input$chrom) + 
+            ggplot2::facet_grid(~trait)
+        
+        cowplot::plot_grid(genoplot, pheno)
+    })
+    
+    
+    # plot nil phenotypes given user input data (control)
+    output$control_plot <- renderPlot({
+        print(plotInput_control())
+    })
+    
+    # plot nil phenotypes given user input data (condition)
+    output$condition_plot <- renderPlot({
+        print(plotInput_condition())
+    })
+    
+    # plot nil phenotypes given user input data (regressed)
+    output$regressed_plot <- renderPlot({
+        print(plotInput_regressed())
     })
     
     output$saveButton <- renderUI({
