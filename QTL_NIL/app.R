@@ -2,6 +2,7 @@ library(shiny)
 library(tidyverse)
 # library(shinyjs)
 library(easysorter)
+library(DT)
 
 # load genotype data
 load("data/nil_genotypes.Rda")
@@ -58,7 +59,6 @@ nil_plot <- function(strains, chr, all.chr=F, section = "all", background = F, c
         dplyr::filter(chrom == chr)%>%
         dplyr::left_join(.,nilsII_sort_type, by = "sample")%>%
         dplyr::left_join(.,nil_sides, by = "sample")%>%
-        # dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>%
         dplyr::group_by(sample)%>%
         dplyr::filter(start > 0 & start < 19e6)%>%
         dplyr::filter(end > 0 | end < 19e6)%>%
@@ -79,7 +79,6 @@ nil_plot <- function(strains, chr, all.chr=F, section = "all", background = F, c
         dplyr::left_join(.,nilsII_sort_type, by = "sample")%>%
         dplyr::left_join(.,nil_sides, by = "sample")%>%
         dplyr::filter(side == "RIGHT")%>%
-        # dplyr::filter(gt == 2 & nil_type == "CB" | gt == 1 & nil_type == "N2")%>% # this step gets rid of chr with no NIL
         dplyr::group_by(sample)%>%
         dplyr::filter(start > 0 & start < 19e6)%>%
         dplyr::filter(end > 0 | end < 19e6)%>%
@@ -219,7 +218,7 @@ nil_plot <- function(strains, chr, all.chr=F, section = "all", background = F, c
                   panel.grid.minor = element_blank(),
                   panel.grid.major = element_blank())+
             geom_vline(xintercept = ci, color = ifelse(ci != 1, "red", NA)) +
-            labs(x = "Genomic Position (Mb)", y = "NIL")
+            labs(x = "Genomic Position (Mb)", y = "")
     }
     
     # return plots and dataframe
@@ -348,7 +347,8 @@ ui <- fluidPage(
            tabsetPanel(type = "tabs",
                        tabPanel("Control", plotOutput("control_plot")),
                        tabPanel("Condition", plotOutput("condition_plot")),
-                       tabPanel("Regressed", plotOutput("regressed_plot"))),
+                       tabPanel("Regressed", plotOutput("regressed_plot")),
+                       tabPanel("NIL Genotypes", uiOutput("nil_genotypes"))),
            
            # button to output plot as png
            uiOutput("saveButton")
@@ -544,6 +544,39 @@ server <- function(input, output) {
     output$regressed_plot <- renderPlot({
         rv$cond <- paste0(input$condition, "-regressed")
         print(plotInput())
+    })
+    
+    # plot nil genotypes for tab
+    output$nil_genotypes <- renderUI({
+        # load phenotype data
+        phenodf <- loadPhenoData()
+        
+        # strains from dataframe
+        strains <- unique(phenodf$strain)
+        if(input$straininput == T) {
+            strains <- input$whichstrains
+        }
+        
+        # plot genotypes, by chromosome
+        nils <- nil_plot(strains, input$chrom)
+        
+        output$nilplot <- renderPlot({
+            nils[[1]]
+        })
+        
+        
+        # show datatable of genotypes
+        output$niltable <- renderDataTable({
+            nils[[3]] %>%
+                dplyr::select(chrom, start, end, sample, genotype = gt_name)
+        })
+        
+        tagList(
+            plotOutput("nilplot"),
+            br(),
+            dataTableOutput("niltable")
+        )
+
     })
     
     output$saveButton <- renderUI({
