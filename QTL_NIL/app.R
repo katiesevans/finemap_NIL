@@ -1,8 +1,7 @@
 library(shiny)
 library(tidyverse)
-# library(shinyjs)
 library(easysorter)
-library(DT)
+library(shinythemes)
 
 # load genotype data
 load("data/nil_genotypes.Rda")
@@ -307,6 +306,38 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
     
 }
 
+quick_plot_breakup_flip2 <- function(df, cond, pltrt) {
+    
+    # default dataframe if no genotype to plot on pheno plot
+    phen_gen <- df %>%
+        dplyr::filter(trait == pltrt, condition == cond)
+    
+    # plot
+    phen_gen %>%
+        ggplot2::ggplot(.) +
+        ggplot2::aes(x = strain,
+                     y = phenotype, 
+                     fill=factor(strain)) +
+        ggplot2::geom_jitter(size = 0.5, width = 0.1)+
+        ggplot2::geom_boxplot(outlier.colour = NA, alpha = 0.7)+
+        ggplot2::theme_bw()+
+        ggplot2::coord_flip()+
+        ggplot2::theme(axis.text.x = element_text(size=10, face="bold", color="black"),
+                       axis.text.y = element_text(size=10, face="bold", color="black"),
+                       axis.title.x = element_text(size=12, face="bold", color="black", vjust=-.3),
+                       axis.title.y = element_blank(),
+                       strip.text.x = element_text(size=10, face="bold", color="black"),
+                       strip.text.y = element_text(size=10, face="bold", color="black"),
+                       plot.title = element_text(size=12, face="bold", vjust = 1),
+                       legend.position="none",
+                       panel.background = element_rect( color="black",size=1.2),
+                       strip.background = element_rect(color = "black", size = 1.2),
+                       panel.border = element_rect( colour = "black"))+
+        ggplot2::labs(y = paste0(cond, ".", pltrt), x = "")
+    
+}
+
+
 
 #Function to get the significance of each strain pair using Tukey HSD
 nil_stats <- function(df, cond, trt, pval = 0.05) {
@@ -325,6 +356,8 @@ nil_stats <- function(df, cond, trt, pval = 0.05) {
 
 # Define UI for application
 ui <- fluidPage(
+    
+    theme = shinythemes::shinytheme('yeti'),
 
    # Application title
    titlePanel("Fine-map QTL with NIL phenotypes"),
@@ -345,6 +378,9 @@ ui <- fluidPage(
            fileInput("file1", "Choose phenotype file (Rdata)",
                      accept = c(".rda", ".Rda", ".RData")),
            
+           # check if your data is not N2/CB NILs, won't show genotypes
+           checkboxInput("n2cb", "My data is not N2/CB NILs"),
+           
            # show the options to choose trait and conditions after the user has uploaded a file
            uiOutput("choosecontrol"),
            
@@ -364,7 +400,7 @@ ui <- fluidPage(
                        tabPanel("Regressed", uiOutput("regressed_plot")),
                        tabPanel("NIL Genotypes", uiOutput("nil_genotypes"))),
            
-           # button to output plot as png
+           # # button to output plot as png
            uiOutput("saveButton")
        )
 
@@ -430,24 +466,27 @@ server <- function(input, output) {
             # choose trait
             selectInput("trait", "Select trait:", choices = unique(phenodf$trait)),
             
-            # radio button input for chromosome to plot
-            radioButtons("chrom", "Choose chromosome to plot:", 
-                         choices = c("I", "II", "III", "IV", "V", "X"),
-                         inline = TRUE,
-                         selected = "I"),
-            
             # choose subset of strains?
             checkboxInput("straininput", "Show a subset of strains?"),
             
             # check box for showing QTL on the phenotye plots
-            checkboxInput("showqtl", "Show QTL?"),
-            
-            uiOutput("number_qtl"),
-            
-            uiOutput("show_qtl_pos")
-            
+            # only if n2cb is not true
+            if(!is.null(input$n2cb) && input$n2cb == FALSE) {
+                tagList(
+                    # radio button input for chromosome to plot
+                    radioButtons("chrom", "Choose chromosome to plot:", 
+                                 choices = c("I", "II", "III", "IV", "V", "X"),
+                                 inline = TRUE,
+                                 selected = "I"),
+                    
+                    checkboxInput("showqtl", "Show QTL?"),
+                    
+                    uiOutput("number_qtl"),
+                    
+                    uiOutput("show_qtl_pos")
+                )
+            }
         )
-
     })
     
     # choose to select strains for the output
@@ -514,27 +553,6 @@ server <- function(input, output) {
         if(input$straininput == T) {
             strains <- input$whichstrains
         }
-
-        # plot genotype with input chrom and qtl position as vertical line
-        geno <- nil_plot(strains, input$chrom)
-
-        # show QTL if it is clicked
-        if(input$showqtl == T) {
-            # how many qtl?
-            qtls <- input$numQTL
-
-            # get all QTL locations
-            vals <- NULL
-            for(i in 1:qtls) {
-                vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
-            }
-
-            genoplot <- geno[[1]] +
-                ggplot2::geom_vline(xintercept = vals)
-
-        } else {
-            genoplot <- geno[[1]]
-        }
         
         # regress
         pruned <- phenodf %>%
@@ -543,22 +561,54 @@ server <- function(input, output) {
         regressed <- easysorter::regress(pruned) %>%
             dplyr::mutate(condition = paste0(condition, "-regressed")) %>%
             dplyr::bind_rows(pruned)
-
-        # plot data
-        regressed$strain <- factor(regressed$strain, levels = unique(geno[[2]]$sample),
-                                 labels = unique(geno[[2]]$sample))
-        pheno <- quick_plot_breakup_flip(regressed,
-                                         rv$cond,
-                                         input$trait,
-                                         geno = input$showgeno,
-                                         pos = vals,
-                                         chr = input$chrom) +
-            ggplot2::facet_grid(~trait)
+        
+        # only plot phenotype if n2cb is checked
+        if(!is.null(input$n2cb) && input$n2cb == TRUE) {
+            phenoplot <- quick_plot_breakup_flip2(regressed,
+                                             rv$cond,
+                                             input$trait) +
+                ggplot2::facet_grid(~trait)
+            
+        } else {
+            # plot genotype with input chrom and qtl position as vertical line
+            geno <- nil_plot(strains, input$chrom)
+            
+            # show QTL if it is clicked
+            if(input$showqtl == T) {
+                # how many qtl?
+                qtls <- input$numQTL
+                
+                # get all QTL locations
+                vals <- NULL
+                for(i in 1:qtls) {
+                    vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
+                }
+                
+                genoplot <- geno[[1]] +
+                    ggplot2::geom_vline(xintercept = vals)
+                
+            } else {
+                genoplot <- geno[[1]]
+            }
+            
+            # plot data
+            regressed$strain <- factor(regressed$strain, levels = unique(geno[[2]]$sample),
+                                       labels = unique(geno[[2]]$sample))
+            pheno <- quick_plot_breakup_flip(regressed,
+                                             rv$cond,
+                                             input$trait,
+                                             geno = input$showgeno,
+                                             pos = vals,
+                                             chr = input$chrom) +
+                ggplot2::facet_grid(~trait)
+            
+            phenoplot <- cowplot::plot_grid(genoplot, pheno)
+        }
         
         # nil stats
         stat <- nil_stats(regressed, rv$cond, input$trait)
 
-        return(list(cowplot::plot_grid(genoplot, pheno), stat))
+        return(list(phenoplot, stat))
     })
 
     # plot nil phenotypes given user input data (control)
@@ -634,8 +684,8 @@ server <- function(input, output) {
         )
     })
     
-    # plot nil genotypes for tab
-    output$nil_genotypes <- renderUI({
+    # code to generate nil genotype dataset
+    nilgeno_dataset <- reactive({
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -647,25 +697,38 @@ server <- function(input, output) {
         
         # plot genotypes, by chromosome
         nils <- nil_plot(strains, input$chrom)
-        
-        output$nilplot <- renderPlot({
-            nils[[1]]
-        })
-        
-        
-        # show datatable of genotypes
-        output$niltable <- renderDataTable({
-            nils[[3]] %>%
-                dplyr::select(chrom, start, end, sample, genotype = gt_name)
-        })
-        
-        tagList(
-            h3("NIL genotypes - plot"),
-            plotOutput("nilplot"),
-            br(),
-            h3("NIL genotypes - breakpoints"),
-            dataTableOutput("niltable")
-        )
+        return(nils)
+    })
+    
+    # plot nil genotypes for tab
+    output$nil_genotypes <- renderUI({
+        # return error message if N2/CB checkbox is clicked
+        if(!is.null(input$n2cb) && input$n2cb == TRUE) {
+            h4(em("Cannot view genotypes for strains that are not N2/CB NILs at this time."))
+        } else {
+            # call nilgeno_dataset
+            nils <- nilgeno_dataset()
+            
+            output$nilplot <- renderPlot({
+                nils[[1]]
+            })
+            
+            
+            # show datatable of genotypes
+            output$niltable <- renderDataTable({
+                nils[[3]] %>%
+                    dplyr::select(chrom, start, end, sample, genotype = gt_name)
+            })
+            
+            tagList(
+                h3("NIL genotypes - plot"),
+                plotOutput("nilplot"),
+                br(),
+                h3("NIL genotypes - breakpoints"),
+                dataTableOutput("niltable"),
+                downloadButton('downloadData', "Download data")
+            )
+        }
 
     })
     
@@ -682,7 +745,15 @@ server <- function(input, output) {
     output$saveImage <- downloadHandler(
         filename = function() { 'test.png' },
         content = function(file) {
-            ggsave(file, plot = plotInput(), device = "png")
+            ggsave(file, plot = plotInput()[[1]], device = "png")
+        }
+    )
+    
+    # handle download of dataset for nil geno
+    output$downloadData <- downloadHandler(
+        filename = "nil_genotypes.csv",
+        content = function(file) {
+            write.csv(nilgeno_dataset()[[3]], file, row.names = FALSE)
         }
     )
 }
