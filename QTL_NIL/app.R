@@ -237,9 +237,8 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
     # default dataframe if no genotype to plot on pheno plot
     phen_gen <- df %>%
         dplyr::filter(trait == pltrt, condition == cond) %>%
-        dplyr::mutate(strain = as.character(strain),
-                      type = dplyr::case_when(strain == "N2" ~ "N2_parent",
-                                       strain == "CB4856" ~ "CB_parent",
+        dplyr::mutate(type = dplyr::case_when(as.character(strain) == "N2" ~ "N2_parent",
+                                       as.character(strain) == "CB4856" ~ "CB_parent",
                                        TRUE ~ "NIL"),
                       pheno = phenotype,
                       geno = "")
@@ -278,13 +277,13 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
         phen_gen <- phen_gen %>%
             dplyr::left_join(geno) %>%
             dplyr::mutate(strain = factor(strain, levels = levels(phen_gen$strain)))
-        
+
     }
     
     # plot
     phen_gen %>%
             ggplot2::ggplot(.) +
-                ggplot2::aes(x = factor(strain),
+                ggplot2::aes(x = strain,
                     y = phenotype, 
                     fill=factor(type)) +
                 ggplot2::geom_jitter(size = 0.5, width = 0.1)+
@@ -309,6 +308,21 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
 }
 
 
+#Function to get the significance of each strain pair using Tukey HSD
+nil_stats <- function(df, cond, trt, pval = 0.05) {
+    
+    # from quick stats
+    stat_df <- df %>%
+        dplyr::filter(trait == trt, condition==cond)%>%
+        dplyr::select(strain, phenotype)
+    aov_res <- aov(stat_df$phenotype ~ stat_df$strain)
+    statsdf <- broom::tidy(TukeyHSD(aov_res)) %>%
+        dplyr::select(strain_pair = comparison, pvalue = adj.p.value) %>%
+        dplyr::mutate(significant = ifelse(pvalue < pval, T, F))
+    
+    return(statsdf)
+}
+
 # Define UI for application
 ui <- fluidPage(
 
@@ -332,7 +346,7 @@ ui <- fluidPage(
                      accept = c(".rda", ".Rda", ".RData")),
            
            # show the options to choose trait and conditions after the user has uploaded a file
-           uiOutput("choosetrait"),
+           uiOutput("choosecontrol"),
            
            # choose to select certain strains
            uiOutput("choosestrains"),
@@ -345,9 +359,9 @@ ui <- fluidPage(
        mainPanel(
            # make tabs for each condition
            tabsetPanel(type = "tabs",
-                       tabPanel("Control", plotOutput("control_plot")),
-                       tabPanel("Condition", plotOutput("condition_plot")),
-                       tabPanel("Regressed", plotOutput("regressed_plot")),
+                       tabPanel("Control", uiOutput("control_plot")),
+                       tabPanel("Condition", uiOutput("condition_plot")),
+                       tabPanel("Regressed", uiOutput("regressed_plot")),
                        tabPanel("NIL Genotypes", uiOutput("nil_genotypes"))),
            
            # button to output plot as png
@@ -384,18 +398,34 @@ server <- function(input, output) {
         
     })
     
+    # choose control first
+    output$choosecontrol <- renderUI({
+        # load phenotype data
+        phenodf <- loadPhenoData()
+        
+        tagList(
+            # choose control
+            selectInput("control", "Select control:", choices = unique(phenodf$condition)),
+            
+            # show output for choosetrait
+            uiOutput("choosetrait")
+        )
+        
+    })
+    
     # give user options for choosing condition and trait once phenotype dataframe is uploaded
     output$choosetrait <- renderUI({
         # load phenotype data
         phenodf <- loadPhenoData()
         
+        # all conditions, including control
+        condition_choices <- unique(phenodf$condition)
+        
         tagList(
             
-            # choose control
-            selectInput("control", "Select control:", choices = unique(phenodf$condition)),
-            
-            # choose condition
-            selectInput("condition", "Select condition:", choices = unique(phenodf$condition)),
+            # choose condition - don't allow user to choose control
+            selectInput("condition", "Select condition:", 
+                        choices = condition_choices[condition_choices != input$control]),
             
             # choose trait
             selectInput("trait", "Select trait:", choices = unique(phenodf$trait)),
@@ -524,26 +554,84 @@ server <- function(input, output) {
                                          pos = vals,
                                          chr = input$chrom) +
             ggplot2::facet_grid(~trait)
+        
+        # nil stats
+        stat <- nil_stats(regressed, rv$cond, input$trait)
 
-        cowplot::plot_grid(genoplot, pheno)
+        return(list(cowplot::plot_grid(genoplot, pheno), stat))
     })
 
     # plot nil phenotypes given user input data (control)
-    output$control_plot <- renderPlot({
+    output$control_plot <- renderUI({
         rv$cond <- input$control
-        print(plotInput())
+        vars <- plotInput()
+        
+        # pheno plot
+        output$controlpheno <- renderPlot({
+            vars[[1]]
+        })
+        
+        # NIL stats dataframe
+        output$controlstat <- renderDataTable({
+            vars[[2]]
+        })
+        
+        tagList(
+            h3("NIL Phenotype"),
+            plotOutput("controlpheno"),
+            br(),
+            h3("NIL stats"),
+            dataTableOutput("controlstat")
+        )
+        
     })
     
     # plot nil phenotypes given user input data (condition)
-    output$condition_plot <- renderPlot({
+    output$condition_plot <- renderUI({
         rv$cond <- input$condition
-        print(plotInput())
+        vars <- plotInput()
+        
+        # pheno plot
+        output$condpheno <- renderPlot({
+            vars[[1]]
+        })
+        
+        # NIL stats dataframe
+        output$condstat <- renderDataTable({
+            vars[[2]]
+        })
+        
+        tagList(
+            h3("NIL phenotype"),
+            plotOutput("condpheno"),
+            br(),
+            h3("NIL stats"),
+            dataTableOutput("condstat")
+        )
     })
     
     # plot nil phenotypes given user input data (regressed)
-    output$regressed_plot <- renderPlot({
+    output$regressed_plot <- renderUI({
         rv$cond <- paste0(input$condition, "-regressed")
-        print(plotInput())
+        vars <- plotInput()
+        
+        # pheno plot
+        output$regpheno <- renderPlot({
+            vars[[1]]
+        })
+        
+        # NIL stats dataframe
+        output$regstat <- renderDataTable({
+            vars[[2]]
+        })
+        
+        tagList(
+            h3("NIL phenotype"),
+            plotOutput("regpheno"),
+            br(),
+            h3("NIL stats"),
+            dataTableOutput("regstat")
+        )
     })
     
     # plot nil genotypes for tab
@@ -572,8 +660,10 @@ server <- function(input, output) {
         })
         
         tagList(
+            h3("NIL genotypes - plot"),
             plotOutput("nilplot"),
             br(),
+            h3("NIL genotypes - breakpoints"),
             dataTableOutput("niltable")
         )
 
