@@ -3,6 +3,11 @@ library(tidyverse)
 library(easysorter)
 library(shinythemes)
 
+#########################################
+#       Load data & functions           #
+#########################################
+
+
 # load genotype data
 load("data/nil_genotypes.Rda")
 
@@ -232,6 +237,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
     
 }
 
+# function for nil phenotype plot without genotype
 quick_plot_breakup_flip2 <- function(df, cond, pltrt) {
     
     # default dataframe if no genotype to plot on pheno plot
@@ -263,8 +269,6 @@ quick_plot_breakup_flip2 <- function(df, cond, pltrt) {
     
 }
 
-
-
 #Function to get the significance of each strain pair using Tukey HSD
 nil_stats <- function(df, cond, trt, pval = 0.05) {
     
@@ -279,6 +283,12 @@ nil_stats <- function(df, cond, trt, pval = 0.05) {
     
     return(statsdf)
 }
+
+
+#########################################
+#                   UI                  #
+#########################################
+
 
 # Define UI for application
 ui <- fluidPage(
@@ -324,7 +334,8 @@ ui <- fluidPage(
                        tabPanel("Control", uiOutput("control_plot")),
                        tabPanel("Condition", uiOutput("condition_plot")),
                        tabPanel("Regressed", uiOutput("regressed_plot")),
-                       tabPanel("NIL Genotypes", uiOutput("nil_genotypes"))),
+                       tabPanel("NIL Genotypes", uiOutput("nil_genotypes")),
+                       tabPanel("Help!", uiOutput("help_page"))),
            
            # # button to output plot as png
            uiOutput("saveButton")
@@ -332,6 +343,12 @@ ui <- fluidPage(
 
    )
 )
+
+
+#########################################
+#               Server                  #
+#########################################
+
 
 # Define server logic required for application
 server <- function(input, output) {
@@ -348,14 +365,36 @@ server <- function(input, output) {
     
     # intro text
     output$intro <- renderUI({
+        p("This shiny app can be used to view NIL phenotypes and genotypes and estimate the location of a QTL. To begin,
+        click the 'Browse' button to open a R data file containing pruned (non-regressed) NIL phenotypes or check the
+        'Use sample data' checkbox to explore our features. For more instructions, refer to the 'Help!' tab below.")
+        
+    })
+    
+    # help page
+    output$help_page <- renderUI({
+        
         tagList(
-            "This shiny app can be used to view NIL phenotypes and genotypes and estimate the location of a QTL. To begin,
-            click the button below to open a R data file containing NIL phenotypes. Once the file has loaded, choose a condition,
-            trait, and chromosome to plot. To show a veritcal line representing the QTL, check the 'Show QTL?' box and use the slider
-            to move the QTL position along the chromosome. Further, click the 'Show genotype?' box to print the genotype of each NIL 
-            at the QTL position on the phenotype plot to the right. No data to analyze right now? No problem. You can use our sample
-            data provided (on chrV) with the app by checking the 'Use sample data' checkbox. Please direct all questions or comments to", 
-            a("Katie", href="mailto:kathrynevans2015@u.northwestern.edu")
+            h2("Help Page"),
+            p("This shiny app can be used to view NIL phenotypes and genotypes and estimate the location of a QTL."),
+            tags$ul(
+                tags$li("To begin,
+            click the 'Browse' button to open a R data file containing pruned (non-regressed) NIL phenotypes or check the
+            'Use sample data' checkbox to explore our features."),
+                tags$li(p(em("Please note, if your data contains strains that are not N2/CB4856 NILs, you can click the corresponding
+               checkbox to hide irrelavent options related to strain genotypes. However, no errors will result by not checking the box."))),
+                tags$li(p("Once the file has loaded, choose a control, condition, and trait to plot.")),
+                tags$li(p(em("Pro tip: the application will not let you choose a condition that is already named as your control, so choose your control first!"))),
+                tags$li(p("The corresponding phenotype box plot should now show up on your screen, you can use the tabs along the top to 
+              rotate between your control phenotype, non-regressed condition phenotype, and your control-regressed condition phenotype.")),
+                tags$li(p("The strain genotypes are plotted to the left of the phenotypes. To see a specific chromosome, select a chromosome from the sidebar.")),
+                tags$li(p("You may also be interested in only a subset of the strains in your assay. To view this, click the checkbox named 'Show a subset
+              of strains? and then unclick the strains you do not wish to show. The application will re-plot the figures and re-run the regression analysis")),
+                tags$li(p("To visualize the location of your QTL, you can check the 'Show QTL' box. A vertical line representing the QTL will appear on
+              the strain genotype plot to the left. You can add more QTL and use the sliders to move the QTL across the chromosome.")),
+                tags$li(p("Further, click the 'Show genotype?' box to print the genotype of each strain at the QTL position on the phenotype plot to the right.")),
+                tags$li(p(em("Please direct all questions or comments to", a("Katie", href="mailto:kathrynevans2015@u.northwestern.edu"))))
+                )
         )
         
     })
@@ -440,6 +479,9 @@ server <- function(input, output) {
         }
     })
     
+    # make a reactive value to keep track of how many sliders we have
+    sliders <- reactiveValues(num = 1)
+
     # show slider bars
     output$show_qtl_pos <- renderUI({
         # only show slider bar if the show QTL checkbox is checked
@@ -447,15 +489,33 @@ server <- function(input, output) {
             # how many qtl in the model?
             qtls <- input$numQTL
             
+            # if(sliders$num > 1) {
+            #     
+            #     
+            # } else {
+            #     tagList(
+            #         # new slider
+            #         sliderInput(glue::glue("qtlpos{sliders$num}"),
+            #                     glue::glue("Choose position of QTL {sliders$num}"),
+            #                     min = 0,
+            #                     max = 20,
+            #                     value = 10,
+            #                     step = 0.1),
+            #         # check box for showing genotypes on the phenotye plots
+            #         checkboxInput("showgeno", "Show genotype?")
+            #     )
+            # }
+            
             tagList(
+
                 # make slider for each QTL
                 lapply(1:qtls, function(i) {
                     tagList(
-                        sliderInput(glue::glue("qtlpos{i}"), 
+                        sliderInput(glue::glue("qtlpos{i}"),
                                     glue::glue("Choose position of QTL {i}"),
-                                    min = 0, 
-                                    max = 20, 
-                                    value = 10, 
+                                    min = 0,
+                                    max = 20,
+                                    value = 10,
                                     step = 0.1)
                     )
                 }),
@@ -464,6 +524,7 @@ server <- function(input, output) {
                 checkboxInput("showgeno", "Show genotype?")
             )
         }
+
     })
     
     # initialize reactive values to tell function to look at control, condition, or regressed
