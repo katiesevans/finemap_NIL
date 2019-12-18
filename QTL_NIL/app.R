@@ -2,6 +2,7 @@ library(shiny)
 library(tidyverse)
 library(easysorter)
 library(shinythemes)
+library(cowplot)
 
 #########################################
 #       Load data & functions           #
@@ -437,16 +438,22 @@ server <- function(input, output) {
         regressed <- pca_regressed[[2]]
         
         # show trait loadings of PCA
-        loadings <- data.frame(unclass(pca_regressed$loadings)) %>%
+        loadings <- data.frame(unclass(pca_regressed[[1]]$loadings)) %>%
             dplyr::mutate(trait = rownames(.)) %>% 
             tidyr::gather(comp, cor, -trait) %>%
-            dplyr::group_by(comp) %>%
-            dplyr::arrange(cor)
+            dplyr::mutate(pc = as.numeric(stringr::str_split_fixed(comp, "\\.",2)[,2]),
+                          comp = as.character(comp)) %>%
+            dplyr::arrange(pc, trait)
+        
+        loadings$comp <- factor(loadings$comp, levels = unique(loadings$comp))
         
         # how to best show the loadings? heatmap?
-        ggplot(loadings) +
+        loadingplot <- ggplot(loadings) +
             aes(x = comp, y = trait, fill = cor) +
-            geom_tile()
+            geom_tile() +
+            scale_fill_gradient2() +
+            theme(axis.text.x = element_text(angle = 90))
+        
         
         # choose trait to plot
         output$pca_trait <- renderUI({
