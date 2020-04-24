@@ -4,6 +4,7 @@ library(easysorter)
 library(shinythemes)
 library(cowplot)
 library(DT)
+library(plotly)
 
 #########################################
 #       Load data & functions           #
@@ -60,10 +61,6 @@ ui <- fluidPage(
                        tabPanel("Control", uiOutput("control_plot")),
                        tabPanel("Condition", uiOutput("condition_plot")),
                        tabPanel("Regressed", uiOutput("regressed_plot")),
-                       # tabPanel("PCA", 
-                       #          #selectInput("pca_trait", "Select PC:", choices = c("PC1", "PC2", "PC3", "PC4", "PC5")),
-                       #          uiOutput("pca_trait"),
-                       #          uiOutput("pca_plot")),
                        tabPanel("NIL Genotypes", uiOutput("nil_genotypes")),
                        tabPanel("Help!", uiOutput("help_page"))),
            
@@ -319,7 +316,9 @@ server <- function(input, output) {
                                              chr = input$chrom) +
                 ggplot2::facet_grid(~trait)
             
-            phenoplot <- cowplot::plot_grid(genoplot, pheno)
+            phenoplot <- plotly::subplot(plotly::ggplotly(genoplot), plotly::ggplotly(pheno))
+            # phenoplot <- cowplot::plot_grid(genoplot, pheno)
+            
         }
         
         # nil stats
@@ -333,8 +332,8 @@ server <- function(input, output) {
         rv$cond <- input$control
         vars <- plotInput()
         
-        # pheno plot
-        output$controlpheno <- renderPlot({
+        # try with plotly
+        output$controlpheno <- plotly::renderPlotly({
             vars[[1]]
         })
         
@@ -345,7 +344,7 @@ server <- function(input, output) {
         
         tagList(
             h3("NIL Phenotype"),
-            plotOutput("controlpheno"),
+            plotly::plotlyOutput("controlpheno"),
             br(),
             h3("NIL stats"),
             DT::dataTableOutput("controlstat")
@@ -359,7 +358,7 @@ server <- function(input, output) {
         vars <- plotInput()
         
         # pheno plot
-        output$condpheno <- renderPlot({
+        output$condpheno <- plotly::renderPlotly({
             vars[[1]]
         })
         
@@ -370,7 +369,7 @@ server <- function(input, output) {
         
         tagList(
             h3("NIL phenotype"),
-            plotOutput("condpheno"),
+            plotly::plotlyOutput("condpheno"),
             br(),
             h3("NIL stats"),
             DT::dataTableOutput("condstat")
@@ -383,7 +382,7 @@ server <- function(input, output) {
         vars <- plotInput()
         
         # pheno plot
-        output$regpheno <- renderPlot({
+        output$regpheno <- plotly::renderPlotly({
             vars[[1]]
         })
         
@@ -394,7 +393,7 @@ server <- function(input, output) {
         
         tagList(
             h3("NIL phenotype"),
-            plotOutput("regpheno"),
+            plotly::plotlyOutput("regpheno"),
             br(),
             h3("NIL stats"),
             DT::dataTableOutput("regstat")
@@ -426,8 +425,8 @@ server <- function(input, output) {
             # call nilgeno_dataset
             nils <- nilgeno_dataset()
             
-            output$nilplot <- renderPlot({
-                nils[[1]]
+            output$nilplot <- plotly::renderPlotly({
+                plotly::ggplotly(nils[[1]])
             })
             
             
@@ -439,7 +438,7 @@ server <- function(input, output) {
             
             tagList(
                 h3("NIL genotypes - plot"),
-                plotOutput("nilplot"),
+                plotly::plotlyOutput("nilplot"),
                 br(),
                 h3("NIL genotypes - breakpoints"),
                 DT::dataTableOutput("niltable"),
