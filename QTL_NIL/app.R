@@ -3,6 +3,7 @@ library(tidyverse)
 library(easysorter)
 library(shinythemes)
 library(cowplot)
+library(DT)
 
 #########################################
 #       Load data & functions           #
@@ -59,10 +60,10 @@ ui <- fluidPage(
                        tabPanel("Control", uiOutput("control_plot")),
                        tabPanel("Condition", uiOutput("condition_plot")),
                        tabPanel("Regressed", uiOutput("regressed_plot")),
-                       tabPanel("PCA", 
-                                #selectInput("pca_trait", "Select PC:", choices = c("PC1", "PC2", "PC3", "PC4", "PC5")),
-                                uiOutput("pca_trait"),
-                                uiOutput("pca_plot")),
+                       # tabPanel("PCA", 
+                       #          #selectInput("pca_trait", "Select PC:", choices = c("PC1", "PC2", "PC3", "PC4", "PC5")),
+                       #          uiOutput("pca_trait"),
+                       #          uiOutput("pca_plot")),
                        tabPanel("NIL Genotypes", uiOutput("nil_genotypes")),
                        tabPanel("Help!", uiOutput("help_page"))),
            
@@ -338,7 +339,7 @@ server <- function(input, output) {
         })
         
         # NIL stats dataframe
-        output$controlstat <- renderDataTable({
+        output$controlstat <- DT::renderDataTable({
             vars[[2]]
         })
         
@@ -347,7 +348,7 @@ server <- function(input, output) {
             plotOutput("controlpheno"),
             br(),
             h3("NIL stats"),
-            dataTableOutput("controlstat")
+            DT::dataTableOutput("controlstat")
         )
         
     })
@@ -363,7 +364,7 @@ server <- function(input, output) {
         })
         
         # NIL stats dataframe
-        output$condstat <- renderDataTable({
+        output$condstat <- DT::renderDataTable({
             vars[[2]]
         })
         
@@ -372,7 +373,7 @@ server <- function(input, output) {
             plotOutput("condpheno"),
             br(),
             h3("NIL stats"),
-            dataTableOutput("condstat")
+            DT::dataTableOutput("condstat")
         )
     })
     
@@ -387,7 +388,7 @@ server <- function(input, output) {
         })
         
         # NIL stats dataframe
-        output$regstat <- renderDataTable({
+        output$regstat <- DT::renderDataTable({
             vars[[2]]
         })
         
@@ -396,7 +397,7 @@ server <- function(input, output) {
             plotOutput("regpheno"),
             br(),
             h3("NIL stats"),
-            dataTableOutput("regstat")
+            DT::dataTableOutput("regstat")
         )
     })
     
@@ -415,126 +416,6 @@ server <- function(input, output) {
         nils <- nil_plot(strains, input$chrom)
         return(nils)
     })
-    
-    # for plotting with PCA step
-    pcaInput <- reactive({
-        # load phenotype data
-        phenodf <- loadPhenoData()
-        
-        # strains from dataframe
-        strains <- unique(phenodf$strain)
-        if(input$straininput == T) {
-            strains <- input$whichstrains
-        }
-        
-        # regress
-        pruned <- phenodf %>%
-            dplyr::ungroup() %>%
-            dplyr::filter(strain %in% strains)
-        regressed <- easysorter::regress(pruned)
-        
-        # calculate PCA
-        pca_regressed <- calc_pc2(regressed)
-        regressed <- pca_regressed[[2]]
-        
-        # show trait loadings of PCA
-        loadings <- data.frame(unclass(pca_regressed[[1]]$loadings)) %>%
-            dplyr::mutate(trait = rownames(.)) %>% 
-            tidyr::gather(comp, cor, -trait) %>%
-            dplyr::mutate(pc = as.numeric(stringr::str_split_fixed(comp, "\\.",2)[,2]),
-                          comp = as.character(comp)) %>%
-            dplyr::arrange(pc, trait)
-        
-        loadings$comp <- factor(loadings$comp, levels = unique(loadings$comp))
-        
-        # how to best show the loadings? heatmap?
-        loadingplot <- ggplot(loadings) +
-            aes(x = comp, y = trait, fill = cor) +
-            geom_tile() +
-            scale_fill_gradient2() +
-            theme(axis.text.x = element_text(angle = 90))
-        
-        
-        # choose trait to plot
-        output$pca_trait <- renderUI({
-            selectInput("pca_trait", "Select PC", unique(regressed$trait))
-        })
-        
-        # only plot phenotype if n2cb is checked
-        if(!is.null(input$n2cb) && input$n2cb == TRUE) {
-            phenoplot <- quick_plot_breakup_flip2(regressed,
-                                                  rv$cond,
-                                                  input$pca_trait) + # HOW TO CHANGE TO MULTIPLE PCs
-                ggplot2::facet_grid(~trait)
-            
-        } else {
-            # plot genotype with input chrom and qtl position as vertical line
-            geno <- nil_plot(strains, input$chrom)
-            
-            # show QTL if it is clicked
-            if(input$showqtl == T) {
-                # how many qtl?
-                qtls <- input$numQTL
-                
-                # get all QTL locations
-                vals <- NULL
-                for(i in 1:qtls) {
-                    vals <- c(vals, input[[glue::glue("qtlpos{i}")]])
-                }
-                
-                genoplot <- geno[[1]] +
-                    ggplot2::geom_vline(xintercept = vals)
-                
-            } else {
-                genoplot <- geno[[1]]
-            }
-            
-            # plot data
-            regressed$strain <- factor(regressed$strain, levels = unique(geno[[2]]$sample),
-                                       labels = unique(geno[[2]]$sample))
-            pheno <- quick_plot_breakup_flip(regressed,
-                                             rv$cond,
-                                             input$pca_trait,
-                                             geno = input$showgeno,
-                                             pos = vals,
-                                             chr = input$chrom) +
-                ggplot2::facet_grid(~trait)
-            
-            phenoplot <- cowplot::plot_grid(genoplot, pheno)
-        }
-        
-        # nil stats
-        stat <- nil_stats(regressed, rv$cond, input$pca_trait)
-        
-        return(list(phenoplot, stat))
-    })
-
-    # make PCA tab
-    output$pca_plot <- renderUI({
-        
-        rv$cond <- input$condition
-        vars <- pcaInput()
-        
-        # pheno plot
-        output$pcapheno <- renderPlot({
-            vars[[1]]
-        })
-        
-        # NIL stats dataframe
-        output$pcastat <- renderDataTable({
-            vars[[2]]
-        })
-        
-        tagList(
-            h3("NIL phenotype"),
-            plotOutput("pcapheno"),
-            br(),
-            h3("NIL stats"),
-            dataTableOutput("pcastat")
-        )
-
-        
-    })
         
     # plot nil genotypes for tab
     output$nil_genotypes <- renderUI({
@@ -551,7 +432,7 @@ server <- function(input, output) {
             
             
             # show datatable of genotypes
-            output$niltable <- renderDataTable({
+            output$niltable <- DT::renderDataTable({
                 nils[[3]] %>%
                     dplyr::select(chrom, start, end, sample, genotype = gt_name)
             })
@@ -561,7 +442,7 @@ server <- function(input, output) {
                 plotOutput("nilplot"),
                 br(),
                 h3("NIL genotypes - breakpoints"),
-                dataTableOutput("niltable"),
+                DT::dataTableOutput("niltable"),
                 downloadButton('downloadData', "Download data")
             )
         }
