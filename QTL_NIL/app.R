@@ -155,6 +155,9 @@ server <- function(input, output) {
             selectInput("condition", "Select condition:", 
                         choices = condition_choices[condition_choices != input$control]),
             
+            # choose experiment if there are multiple...
+            selectInput("exp", "Select assay:", choices = unique(phenodf$experiment)),
+            
             # choose trait
             selectInput("trait", "Select trait:", choices = unique(phenodf$trait)),
             
@@ -185,6 +188,10 @@ server <- function(input, output) {
     output$choosestrains <- renderUI({
         # load phenotype data
         phenodf <- loadPhenoData()
+        
+        # select experiment
+        phenodf <- phenodf %>%
+            dplyr::filter(experiment == input$exp)
         
         # only show the options if this is checked
         if(!is.null(input$straininput) && input$straininput == T) {
@@ -262,6 +269,10 @@ server <- function(input, output) {
         # load phenotype data
         phenodf <- loadPhenoData()
         
+        # select experiment
+        phenodf <- phenodf %>%
+            dplyr::filter(experiment == input$exp)
+        
         # strains from dataframe
         strains <- unique(phenodf$strain)
         if(input$straininput == T) {
@@ -272,7 +283,16 @@ server <- function(input, output) {
         pruned <- phenodf %>%
             dplyr::ungroup() %>%
             dplyr::filter(strain %in% strains)
-        regressed <- easysorter::regress(pruned) %>%
+        
+        # assay regression
+        if(length(unique(pruned$assay)) > 1) {
+            assreg <- easysorter::regress(pruned, assay = TRUE)
+        } else {
+            assreg <- pruned
+        }
+        
+        regressed <- easysorter::regress(assreg) %>%
+            dplyr::ungroup() %>%
             dplyr::mutate(condition = paste0(condition, "-regressed")) %>%
             dplyr::bind_rows(pruned)
         
@@ -316,9 +336,9 @@ server <- function(input, output) {
                                              chr = input$chrom) +
                 ggplot2::facet_grid(~trait)
             
-            phenoplot <- plotly::subplot(plotly::ggplotly(genoplot), plotly::ggplotly(pheno))
-            # phenoplot <- cowplot::plot_grid(genoplot, pheno)
-            
+            phenoplot <- plotly::subplot(plotly::ggplotly(genoplot, tooltip = "text"), 
+                                         plotly::ggplotly(pheno, tooltip = "text"))
+
         }
         
         # nil stats
@@ -412,7 +432,7 @@ server <- function(input, output) {
         }
         
         # plot genotypes, by chromosome
-        nils <- nil_plot(strains, input$chrom)
+        nils <- nil_plot(strains, input$chrom, all.chr = T)
         return(nils)
     })
         
@@ -426,7 +446,7 @@ server <- function(input, output) {
             nils <- nilgeno_dataset()
             
             output$nilplot <- plotly::renderPlotly({
-                plotly::ggplotly(nils[[1]])
+                plotly::ggplotly(nils[[1]], tooltip = "text")
             })
             
             

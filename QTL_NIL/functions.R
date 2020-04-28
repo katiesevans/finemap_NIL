@@ -129,7 +129,9 @@ nil_plot <- function(strains, chr, all.chr=F, section = "all", background = F, c
     
     # plot all NILs
     nl.pl <- ggplot(nilsII)+
-        geom_segment(aes(x = start/1e6, y = sample, xend = end/1e6, yend = sample, color = gt, size = 2))+
+        geom_segment(aes(x = start/1e6, y = sample, xend = end/1e6, yend = sample, 
+                         color = gt, size = 2, 
+                         text = glue::glue("Strain: {sample} \n Genotype: {gt_name} ({round(start/1e6, digits = 2)} Mb - {round(end/1e6, digits = 2)} Mb)")))+
         facet_grid(~chrom, scales = "free",  space = "free")+
         scale_color_manual(values=c("1"="orange","2"="blue", "3"="grey"))+
         theme_bw() +
@@ -202,10 +204,13 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
     
     # plot
     phen_gen %>%
+        dplyr::mutate(assay = ifelse(is.na(assay), paste0(date, "-", experiment),
+                             paste0(date, "-", experiment, "-", round, assay))) %>%
         ggplot2::ggplot(.) +
         ggplot2::aes(x = factor(strain),
                      y = phenotype, 
-                     fill=factor(type)) +
+                     fill=factor(type), 
+                     text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
         ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5), size = 3) +
         ggplot2::geom_boxplot(outlier.colour = NA, alpha = 0.7)+
@@ -236,10 +241,13 @@ quick_plot_breakup_flip2 <- function(df, cond, pltrt) {
     
     # plot
     phen_gen %>%
+        dplyr::mutate(assay = ifelse(is.na(assay), paste0(date, "-", experiment),
+                             paste0(date, "-", experiment, "-", round, assay))) %>%
         ggplot2::ggplot(.) +
         ggplot2::aes(x = strain,
                      y = phenotype, 
-                     fill=factor(strain)) +
+                     fill=factor(strain),
+                     text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
         ggplot2::geom_boxplot(outlier.colour = NA, alpha = 0.7)+
         ggplot2::theme_bw()+
