@@ -166,7 +166,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
         
         df2 <- phen_gen %>%
             dplyr::group_by(strain) %>%
-            dplyr::summarize(pheno = max(phenotype))
+            dplyr::summarize(pheno = max(phenotype)*1.5) # not perfect but okay
         
         # if multiple QTL, find the genotype at each QTL
         geno <- NULL
@@ -212,9 +212,10 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
                      fill=factor(type), 
                      text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
-        ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5), size = 3) +
-        ggplot2::geom_boxplot(outlier.colour = NA, alpha = 0.7)+
+        ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5, color = geno), size = 3) +
+        ggplot2::geom_boxplot(outlier.colour = NA,outlier.shape = NA, outlier.size = -1, alpha = 0.7)+
         ggplot2::scale_fill_manual(values = c("N2_parent" = "orange", "CB_parent" = "blue", "NIL" = "gray"))+
+        ggplot2::scale_color_manual(values = c("N" = "orange", "C" = "blue", "?" = "grey"))+
         ggplot2::theme_bw()+
         ggplot2::coord_flip()+
         ggplot2::theme(axis.text.x = element_text(size=10, face="bold", color="black"),
@@ -249,7 +250,7 @@ quick_plot_breakup_flip2 <- function(df, cond, pltrt) {
                      fill=factor(strain),
                      text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
-        ggplot2::geom_boxplot(outlier.colour = NA, alpha = 0.7)+
+        ggplot2::geom_boxplot(outlier.colour = NA,outlier.shape = NA, outlier.size = -1, alpha = 0.7)+
         ggplot2::theme_bw()+
         ggplot2::coord_flip()+
         ggplot2::theme(axis.text.x = element_text(size=10, face="bold", color="black"),

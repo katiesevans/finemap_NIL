@@ -35,37 +35,37 @@ ui <- fluidPage(
    sidebarLayout(
        sidebarPanel(
            # use provided sample data
-           checkboxInput("sampledata", "Use sample data"),
+           shiny::checkboxInput("sampledata", "Use sample data"),
            
            # Input: Select a file
-           fileInput("file1", "Choose phenotype file (Rdata)",
+           shiny::fileInput("file1", "Choose phenotype file (Rdata)",
                      accept = c(".rda", ".Rda", ".RData")),
            
            # check if your data is not N2/CB NILs, won't show genotypes
-           checkboxInput("n2cb", "My data is not N2/CB NILs"),
+           shiny::checkboxInput("n2cb", "My data is not N2/CB NILs"),
            
            # show the options to choose trait and conditions after the user has uploaded a file
-           uiOutput("choosecontrol"),
+           shiny::uiOutput("choosecontrol"),
            
            # choose to select certain strains
-           uiOutput("choosestrains"),
+           shiny::uiOutput("choosestrains"),
            
            # show the options to choose QTL and genotype
-           uiOutput("chooseqtl")
+           shiny::uiOutput("chooseqtl")
            
        ),
        
        mainPanel(
            # make tabs for each condition
-           tabsetPanel(type = "tabs",
-                       tabPanel("Control", uiOutput("control_plot")),
-                       tabPanel("Condition", uiOutput("condition_plot")),
-                       tabPanel("Regressed", uiOutput("regressed_plot")),
-                       tabPanel("NIL Genotypes", uiOutput("nil_genotypes")),
-                       tabPanel("Help!", uiOutput("help_page"))),
+           shiny::tabsetPanel(type = "tabs",
+                              shiny::tabPanel("Control", shiny::uiOutput("control_plot")),
+                              shiny::tabPanel("Condition", shiny::uiOutput("condition_plot")),
+                              shiny::tabPanel("Regressed", shiny::uiOutput("regressed_plot")),
+                              shiny::tabPanel("NIL Genotypes", shiny::uiOutput("nil_genotypes")),
+                              shiny::tabPanel("Help!", shiny::uiOutput("help_page"))),
            
            # # button to output plot as png
-           uiOutput("saveButton")
+           shiny::uiOutput("saveButton")
        )
 
    )
@@ -81,7 +81,7 @@ ui <- fluidPage(
 server <- function(input, output) {
     
     # load phenotype data
-    loadPhenoData <- reactive({
+    loadPhenoData <- shiny::reactive({
         if(!is.null(input$sampledata) && input$sampledata == T) {
             assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
         } else {
@@ -91,7 +91,7 @@ server <- function(input, output) {
     })
     
     # intro text
-    output$intro <- renderUI({
+    output$intro <- shiny::renderUI({
         p("This shiny app can be used to view NIL phenotypes and genotypes and estimate the location of a QTL. To begin,
         click the 'Browse' button to open a R data file containing pruned (non-regressed) NIL phenotypes or check the
         'Use sample data' checkbox to explore our features. For more instructions, refer to the 'Help!' tab below.")
@@ -99,7 +99,7 @@ server <- function(input, output) {
     })
     
     # help page
-    output$help_page <- renderUI({
+    output$help_page <- shiny::renderUI({
         
         tagList(
             h2("Help Page"),
@@ -127,7 +127,7 @@ server <- function(input, output) {
     })
     
     # choose control first
-    output$choosecontrol <- renderUI({
+    output$choosecontrol <- shiny::renderUI({
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -142,7 +142,7 @@ server <- function(input, output) {
     })
     
     # give user options for choosing condition and trait once phenotype dataframe is uploaded
-    output$choosetrait <- renderUI({
+    output$choosetrait <- shiny::renderUI({
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -185,7 +185,7 @@ server <- function(input, output) {
     })
     
     # choose to select strains for the output
-    output$choosestrains <- renderUI({
+    output$choosestrains <- shiny::renderUI({
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -205,7 +205,7 @@ server <- function(input, output) {
     })
     
     # how many QTL?
-    output$number_qtl <- renderUI({
+    output$number_qtl <- shiny::renderUI({
         # only show slider bar if the show QTL checkbox is checked
         if(!is.null(input$showqtl) && input$showqtl == T) {
             # how many qtl?
@@ -214,10 +214,10 @@ server <- function(input, output) {
     })
     
     # make a reactive value to keep track of how many sliders we have
-    sliders <- reactiveValues(num = 1)
+    sliders <- shiny::reactiveValues(num = 1)
 
     # show slider bars
-    output$show_qtl_pos <- renderUI({
+    output$show_qtl_pos <- shiny::renderUI({
         # only show slider bar if the show QTL checkbox is checked
         if(!is.null(input$showqtl) && input$showqtl == T) {
             # how many qtl in the model?
@@ -262,10 +262,12 @@ server <- function(input, output) {
     })
     
     # initialize reactive values to tell function to look at control, condition, or regressed
-    rv <- reactiveValues(cond = NA)
+    rv <- shiny::reactiveValues(cond = NA)
     
     # function to make geno/pheno plot
-    plotInput <- reactive({
+    # plotInput <- shiny::eventReactive(input$go, {
+    plotInput <- shiny::reactive({
+
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -348,8 +350,9 @@ server <- function(input, output) {
     })
 
     # plot nil phenotypes given user input data (control)
-    output$control_plot <- renderUI({
+    output$control_plot <- shiny::renderUI({
         rv$cond <- input$control
+        
         vars <- plotInput()
         
         # try with plotly
@@ -373,7 +376,7 @@ server <- function(input, output) {
     })
     
     # plot nil phenotypes given user input data (condition)
-    output$condition_plot <- renderUI({
+    output$condition_plot <- shiny::renderUI({
         rv$cond <- input$condition
         vars <- plotInput()
         
@@ -397,7 +400,7 @@ server <- function(input, output) {
     })
     
     # plot nil phenotypes given user input data (regressed)
-    output$regressed_plot <- renderUI({
+    output$regressed_plot <- shiny::renderUI({
         rv$cond <- paste0(input$condition, "-regressed")
         vars <- plotInput()
         
@@ -421,7 +424,7 @@ server <- function(input, output) {
     })
     
     # code to generate nil genotype dataset
-    nilgeno_dataset <- reactive({
+    nilgeno_dataset <- shiny::reactive({
         # load phenotype data
         phenodf <- loadPhenoData()
         
@@ -437,7 +440,7 @@ server <- function(input, output) {
     })
         
     # plot nil genotypes for tab
-    output$nil_genotypes <- renderUI({
+    output$nil_genotypes <- shiny::renderUI({
         # return error message if N2/CB checkbox is clicked
         if(!is.null(input$n2cb) && input$n2cb == TRUE) {
             h4(em("Cannot view genotypes for strains that are not N2/CB NILs at this time."))
@@ -468,17 +471,17 @@ server <- function(input, output) {
 
     })
     
-    output$saveButton <- renderUI({
+    output$saveButton <- shiny::renderUI({
         req(input$file1)
         downloadButton('saveImage', 'Save plot')
     })
     
     # output figure as png if button is pressed
-    savePlot <- eventReactive(input$saveImage, {
+    savePlot <- shiny::eventReactive(input$saveImage, {
         input$n
     })
     
-    output$saveImage <- downloadHandler(
+    output$saveImage <- shiny::downloadHandler(
         filename = function() { 'test.png' },
         content = function(file) {
             ggsave(file, plot = plotInput()[[1]], device = "png")
@@ -486,7 +489,7 @@ server <- function(input, output) {
     )
     
     # handle download of dataset for nil geno
-    output$downloadData <- downloadHandler(
+    output$downloadData <- shiny::downloadHandler(
         filename = "nil_genotypes.csv",
         content = function(file) {
             write.csv(nilgeno_dataset()[[3]], file, row.names = FALSE)
