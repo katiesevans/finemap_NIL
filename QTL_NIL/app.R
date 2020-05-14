@@ -39,7 +39,7 @@ ui <- fluidPage(
            
            # Input: Select a file
            shiny::fileInput("file1", "Choose phenotype file (Rdata)",
-                     accept = c(".rda", ".Rda", ".RData")),
+                     accept = c(".rda", ".Rda", ".RData", ".csv")),
            
            # check if your data is not N2/CB NILs, won't show genotypes
            shiny::checkboxInput("n2cb", "My data is not N2/CB NILs"),
@@ -86,7 +86,13 @@ server <- function(input, output) {
             assign('phenodf', get(load("data/test_NIL_pheno.Rda")))
         } else {
             req(input$file1)
-            assign('phenodf', get(load(input$file1$datapath)))
+            # If CSV File
+            if(grepl(".csv", input$file1$datapath)) {
+                phenodf <- read.csv(input$file1$datapath) %>%
+                    dplyr::mutate(condition = as.character(condition))
+            } else { # otherwise, RDA file
+                assign('phenodf', get(load(input$file1$datapath)))
+            }
         }
     })
     
@@ -131,9 +137,17 @@ server <- function(input, output) {
         # load phenotype data
         phenodf <- loadPhenoData()
         
+        # choose control: if dmso or water exists, choose this first.
+        if(sum(c("DMSO", "water", "None", "Water") %in% unique(phenodf$condition)) > 0) {
+            control_choices <- intersect(c("DMSO", "water", "None", "Water"), unique(phenodf$condition))
+        } else {
+            control_choices <- unique(phenodf$condition)
+        }
+        
         tagList(
+           
             # choose control
-            selectInput("control", "Select control:", choices = unique(phenodf$condition)),
+            selectInput("control", "Select control:", choices = control_choices),
             
             # show output for choosetrait
             uiOutput("choosetrait")
@@ -346,7 +360,7 @@ server <- function(input, output) {
         # nil stats
         stat <- nil_stats(regressed, rv$cond, input$trait)
 
-        return(list(phenoplot, stat))
+        return(list(phenoplot, stat, cowplot::plot_grid(genoplot, pheno, nrow = 1)))
     })
 
     # plot nil phenotypes given user input data (control)
@@ -484,7 +498,7 @@ server <- function(input, output) {
     output$saveImage <- shiny::downloadHandler(
         filename = function() { 'test.png' },
         content = function(file) {
-            ggsave(file, plot = plotInput()[[1]], device = "png")
+            ggsave(file, plot = plotInput()[[3]], device = "png")
         }
     )
     

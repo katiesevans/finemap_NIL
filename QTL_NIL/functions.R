@@ -180,13 +180,15 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
                 dplyr::distinct(sample, start, gt_name) %>%
                 dplyr::mutate(geno = dplyr::case_when(gt_name == "N2" ~ "N",
                                                       gt_name == "CB4856" ~ "C",
-                                                      TRUE ~ "?")) %>%
-                dplyr::select(strain = sample, geno)
+                                                      TRUE ~ "?"),
+                              position = i) %>%
+                dplyr::select(strain = sample, geno, position)
             genos <- dplyr::bind_rows(genos, genodf)
         }
         
         # combine genotypes (if more than one QTL)
         genodf <- genos %>%
+            dplyr::arrange(position, strain) %>%
             dplyr::group_by(strain) %>%
             dplyr::mutate(genotype = paste(geno, collapse = " ")) %>%
             dplyr::select(strain, geno = genotype) %>%
@@ -212,7 +214,7 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
                      fill=factor(type), 
                      text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
-        ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5, color = geno), size = 3) +
+        ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5), size = 3) +
         ggplot2::geom_boxplot(outlier.colour = NA,outlier.shape = NA, outlier.size = -1, alpha = 0.7)+
         ggplot2::scale_fill_manual(values = c("N2_parent" = "orange", "CB_parent" = "blue", "NIL" = "gray"))+
         ggplot2::scale_color_manual(values = c("N" = "orange", "C" = "blue", "?" = "grey"))+
