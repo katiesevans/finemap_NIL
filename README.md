@@ -28,7 +28,7 @@ The final tab, “Help!” provides the user with the instructions detailed here
 
 In addition to these basic controls, the user also has access to several advanced features. The user can choose a subset of strains to plot by checking the box labeled “Show a subset of strains?” and unchecking the boxes next to strains the user wishes to omit. Additionally, the user can plot the location of one or more QTL as a vertical line on the NIL genotype plot by checking the “Show QTL?” box. The user then chooses how many QTL to show and uses the appropriate slider input below to designate the genomic positions of each QTL. 
 
-<img src="https://github.com/katiesevans/finemap_NIL/blob/master/images/advanced.png" width="750"/>
+<img src="https://github.com/katiesevans/finemap_NIL/blob/master/images/advanced.png" width="250"/>
 
 Finally, if the “Show genotype?” box is checked, the genotype of each strain at each QTL position will be shown on the phenotype plot as an orange “N” representing N2 and a blue “C” representing CB4856.
 
