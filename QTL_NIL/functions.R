@@ -211,8 +211,8 @@ quick_plot_breakup_flip <- function(df, cond, pltrt, geno = F, pos = NA, chr = N
         ggplot2::ggplot(.) +
         ggplot2::aes(x = factor(strain),
                      y = phenotype, 
-                     fill=factor(type), 
-                     text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
+                     fill=factor(type)) + 
+                     # text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")) +
         ggplot2::geom_jitter(size = 0.5, width = 0.1)+
         ggplot2::geom_text(aes(x = strain, y = pheno, label = geno, vjust = 1.5), size = 3) +
         ggplot2::geom_boxplot(outlier.colour = NA,outlier.shape = NA, outlier.size = -1, alpha = 0.7)+

@@ -353,8 +353,9 @@ server <- function(input, output) {
                 ggplot2::facet_grid(~trait)
             
             phenoplot <- plotly::subplot(plotly::ggplotly(genoplot, tooltip = "text"), 
-                                         plotly::ggplotly(pheno, tooltip = "text"))
-
+                                         plotly::ggplotly(pheno +
+                                                              aes(text = glue::glue("Strain: {strain}\n Rep: p{plate}_{row}{col} \n Assay: {assay} \n Pheno: {round(phenotype, digits = 3)}")), 
+                                         tooltip = "text"))
         }
         
         # nil stats
@@ -498,7 +499,7 @@ server <- function(input, output) {
     output$saveImage <- shiny::downloadHandler(
         filename = function() { 'test.png' },
         content = function(file) {
-            ggsave(file, plot = plotInput()[[3]], device = "png")
+            ggsave(file, plot = plotInput()[[3]], device = "png", height = 5, width = 10)
         }
     )
     
