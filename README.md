@@ -3,6 +3,8 @@ An R shiny web app was developed to visualize the results from the high-throughp
 
 ***Link to Shiny app: [here](https://katiesevans9.shinyapps.io/QTL_NIL/)***
 
+This application was published as part of a manuscript that can be found [here](https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1008986)!
+
 ## EXPLANATION OF FUNCTIONALITY
 To begin analysis, the user can find all data controls in a panel on the left-hand side of the screen. A test dataset is provided (user should check “Use sample data” checkbox) or the user can upload a file from their local computer (see below for input file tips).  
 
