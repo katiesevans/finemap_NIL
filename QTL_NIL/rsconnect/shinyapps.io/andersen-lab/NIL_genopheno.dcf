@@ -1,0 +1,12 @@
+name: NIL_genopheno
+title: NIL_genopheno
+username:
+account: andersen-lab
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3347142
+bundleId: 3939369
+url: https://andersen-lab.shinyapps.io/NIL_genopheno/
+when: 1607020762.32128
+asMultiple: FALSE
+asStatic: FALSE
